@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import triplet
+import time
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "1, 2"
 
@@ -79,14 +80,15 @@ with tf.Session() as sess:
         print("aaa")
 
         t = sess.run(big_batch)
-        print("bbb {}".format(t.shape))
+        print("bbb")
+        s = time.time()
         semi_loss = sess.run(triple.semi_loss, feed_dict={data_holder:t})
-        print("ccc")
-        tl = np.split(t, len(t))
-        index = semi_loss < -1e-6
-        a_list += tl[0:batch_size][index]
-        p_list += tl[batch_size:2 * batch_size][index]
-        n_list += tl[2 * batch_size:3 * batch_size][index]
+        print("time is {}".format(time.time() - s))
+        index = semi_loss < 0
+        print("sample number {}".format(np.sum(index)))
+        a_list += np.split(t[0:batch_size][index], np.sum(index))
+        p_list += np.split(t[batch_size:2 * batch_size][index], np.sum(index))
+        n_list += np.split(t[2 * batch_size: 3 * batch_size][index], np.sum(index))
 
     t = a_list[0:batch_size] + p_list[0:batch_size] + n_list[0:batch_size]
     t = list(f.reshape((1, 512, 512, 3)) for f in t)

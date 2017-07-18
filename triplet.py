@@ -32,19 +32,19 @@ class Triplet:
         # after the conv1_1, the shape is [batch, 512, 512, 64]
         # after the conv1_2, the shape is [batch, 256, 256, 64]
         # after the pooling layer, the shape is [batch, 128, 128, 64]
-        self.conv1_1 = self.conv_layer(triplet, 3, [1, 1, 1, 1], 3, 64, 'conv1_1')
-        self.conv1_2 = self.conv_layer(self.conv1_1, 3, [1, 2, 2, 1], 64, 64, 'conv1_2')
-        self.pool1 = self.max_pool(self.conv1_2, [1, 2, 2, 1], [1, 2, 2 ,1], 'pool1' )
+        self.conv1_1 = self.conv_layer(triplet, 3, [1, 2, 2, 1], 3, 64, 'conv1_1')
+        # self.conv1_2 = self.conv_layer(self.conv1_1, 3, [1, 2, 2, 1], 64, 64, 'conv1_2')
+        self.pool1 = self.max_pool(self.conv1_1, [1, 2, 2, 1], [1, 2, 2 ,1], 'pool1' )
 
         self.conv2_1 = self.conv_layer(bottom=self.pool1,
-                                       filter_size=3, stride=[1, 1, 1, 1],
+                                       filter_size=3, stride=[1, 2, 2, 1],
                                        in_channels=64, out_channels=128, name='conv2_1')
-        self.conv2_2 = self.conv_layer(self.conv2_1, 3, [1, 2, 2, 1], 128, 128, 'conv2_2')
-        self.pool2 = self.max_pool(self.conv2_2, [1, 2, 2, 1], [1, 2, 2, 1], 'pool2')
+        # self.conv2_2 = self.conv_layer(self.conv2_1, 3, [1, 2, 2, 1], 128, 128, 'conv2_2')
+        self.pool2 = self.max_pool(self.conv2_1, [1, 2, 2, 1], [1, 2, 2, 1], 'pool2')
 
-        self.conv3_1 = self.conv_layer(self.pool2, 3, [1, 1, 1, 1], 128, 256, 'conv3_1')
-        self.conv3_2 = self.conv_layer(self.conv3_1, 3, [1, 2, 2, 1], 256, 256, 'conv3_2')
-        self.pool3 = self.max_pool(self.conv3_2, [1, 2, 2, 1], [1, 2, 2, 1], 'pool3')
+        self.conv3_1 = self.conv_layer(self.pool2, 3, [1, 2, 2, 1], 128, 256, 'conv3_1')
+        # self.conv3_2 = self.conv_layer(self.conv3_1, 3, [1, 2, 2, 1], 256, 256, 'conv3_2')
+        self.pool3 = self.max_pool(self.conv3_1, [1, 2, 2, 1], [1, 2, 2, 1], 'pool3')
 
         # change the input to an 4096 vector
         shape = self.pool3.shape.as_list()
@@ -60,13 +60,22 @@ class Triplet:
 
         batch_size = int( triplet.shape.as_list()[0] / 3 )
 
-        a_norm = self.l2_norm[0:20]
+        a_norm = self.l2_norm[0:batch_size]
         p_norm = self.l2_norm[batch_size:(2*batch_size)]
         n_norm = self.l2_norm[2*batch_size:(3*batch_size)]
 
-        self.semi_loss = 2 * tf.nn.l2_loss(a_norm - p_norm) - 2 * tf.nn.l2_loss(a_norm - n_norm)
+        self.semi_loss = self.l2_loss(a_norm - p_norm) - self.l2_loss(a_norm - n_norm)
+        self.hard_loss = tf.reduce_mean(tf.nn.relu(self.semi_loss + self.alpha), name='hard_loss')
 
-        self.hard_loss = tf.reduce_sum(tf.nn.relu(self.semi_loss + self.alpha), name='hard_loss')
+    def l2_loss(self, bottom, axis=1, name='l2_loss'):
+        '''
+        compute the l2_loss of every sample
+        :param bottom: 
+        :param axis: the rank of the tensor is reduced by 1 for each entry in axis
+        :param name: 
+        :return: 
+        '''
+        return tf.reduce_sum(tf.square(bottom), axis=axis, name=name)
 
     def avg_pool(self, bottom, kernal, stride, name):
         '''
