@@ -5,7 +5,7 @@ from functools import reduce
 
 class Triplet:
 
-    def __init__(self, npy_path=None, trainable=True, dropout=0.5):
+    def __init__(self, npy_path=None, trainable=True, dropout=0.5, alpha=0.2):
         if npy_path is not None:
             self.data_dict = np.load(npy_path, encoding='latin1').item()
         else:
@@ -14,11 +14,12 @@ class Triplet:
         self.var_dict = {}
         self.trainable = trainable
         self.dropout = dropout
+        self.alpha = alpha
 
-    def build(self, triple, train_mode=None):
+    def build(self, triplet, train_mode=None):
         '''
         construct the triplet network
-        :param triple: a mini-batch of triples, its shape is [batchsize, 512, 512, 3]
+        :param triplet: a mini-batch of triples, its shape is [batchsize, 512, 512, 3]
                the first 1/3  of the batchsize are the anchor samples
                the second 1/3 are the positive samples
                the last 1/3 are negative samples
@@ -31,7 +32,7 @@ class Triplet:
         # after the conv1_1, the shape is [batch, 512, 512, 64]
         # after the conv1_2, the shape is [batch, 256, 256, 64]
         # after the pooling layer, the shape is [batch, 128, 128, 64]
-        self.conv1_1 = self.conv_layer(triple, 3, [1, 1, 1, 1], 3, 64, 'conv1_1')
+        self.conv1_1 = self.conv_layer(triplet, 3, [1, 1, 1, 1], 3, 64, 'conv1_1')
         self.conv1_2 = self.conv_layer(self.conv1_1, 3, [1, 2, 2, 1], 64, 64, 'conv1_2')
         self.pool1 = self.max_pool(self.conv1_2, [1, 2, 2, 1], [1, 2, 2 ,1], 'pool1' )
 
@@ -46,15 +47,26 @@ class Triplet:
         self.pool3 = self.max_pool(self.conv3_2, [1, 2, 2, 1], [1, 2, 2, 1], 'pool3')
 
         # change the input to an 4096 vector
-        shape = self.pool3.shape
+        shape = self.pool3.shape.as_list()
         in_size = shape[1]*shape[2]*shape[3]
-        self.fc4 = self.fc_layer(self.pool3, in_size, out_size=4096, name='fc4')
+        print(in_size)
+        self.fc4 = self.fc_layer(self.pool3, in_size=in_size, out_size=4096, name='fc4')
         self.relu4 = tf.nn.relu(self.fc4)
 
         # change the 4096 vector to 1024 vector
         self.fc5 = self.fc_layer(self.relu4, in_size=4096, out_size=1024, name='fc5')
 
-        self.l2_norm = tf.nn.l2_normalize(self.fc5, dim=0, name='l2_norm')
+        self.l2_norm = tf.nn.l2_normalize(self.fc5, dim=1, name='l2_norm')
+
+        batch_size = int( triplet.shape.as_list()[0] / 3 )
+
+        a_norm = self.l2_norm[0:20]
+        p_norm = self.l2_norm[batch_size:(2*batch_size)]
+        n_norm = self.l2_norm[2*batch_size:(3*batch_size)]
+
+        self.semi_loss = 2 * tf.nn.l2_loss(a_norm - p_norm) - 2 * tf.nn.l2_loss(a_norm - n_norm)
+
+        self.hard_loss = tf.reduce_sum(tf.nn.relu(self.semi_loss + self.alpha), name='hard_loss')
 
     def avg_pool(self, bottom, kernal, stride, name):
         '''
