@@ -49,7 +49,6 @@ class Triplet:
         # change the input to an 4096 vector
         shape = self.pool3.shape.as_list()
         in_size = shape[1]*shape[2]*shape[3]
-        print(in_size)
         self.fc4 = self.fc_layer(self.pool3, in_size=in_size, out_size=4096, name='fc4')
         self.relu4 = tf.nn.relu(self.fc4)
 

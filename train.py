@@ -1,9 +1,8 @@
 import tensorflow as tf
 import numpy as np
 import triplet
-import time
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "1, 2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 log_dir = './logs'
 tfrecord_dir = 'tfrecord/'
@@ -53,7 +52,6 @@ with tf.Session() as sess:
     big_batch = tf.concat((anchor, positive, negative), axis=0)
     data_holder = tf.placeholder(tf.float32, (3*batch_size, 512, 512, 3), name='train_data')
 
-    print(big_batch.shape)
     triple = triplet.Triplet()
     triple.build(data_holder)
 
@@ -70,40 +68,31 @@ with tf.Session() as sess:
     tf.train.start_queue_runners(sess)
 
 
-    # while(global_step < 20001):
+    while(global_step < 20001):
         # prepare the data
-    a_list = []
-    p_list = []
-    n_list = []
-    while len(a_list) < 20:
+        a_list = []
+        p_list = []
+        n_list = []
+        while len(a_list) < 20:
+            t = sess.run(big_batch)
+            semi_loss = sess.run(triple.semi_loss, feed_dict={data_holder:t})
+            index = semi_loss < 0
+            a_list += np.split(t[0:batch_size][index], np.sum(index))
+            p_list += np.split(t[batch_size:2 * batch_size][index], np.sum(index))
+            n_list += np.split(t[2 * batch_size: 3 * batch_size][index], np.sum(index))
 
-        print("aaa")
+        t = a_list[0:batch_size] + p_list[0:batch_size] + n_list[0:batch_size]
+        t = list(f.reshape((1, 512, 512, 3)) for f in t)
+        t = np.concatenate(t, axis=0)
 
-        t = sess.run(big_batch)
-        print("bbb")
-        s = time.time()
-        semi_loss = sess.run(triple.semi_loss, feed_dict={data_holder:t})
-        print("time is {}".format(time.time() - s))
-        index = semi_loss < 0
-        print("sample number {}".format(np.sum(index)))
-        a_list += np.split(t[0:batch_size][index], np.sum(index))
-        p_list += np.split(t[batch_size:2 * batch_size][index], np.sum(index))
-        n_list += np.split(t[2 * batch_size: 3 * batch_size][index], np.sum(index))
-
-    t = a_list[0:batch_size] + p_list[0:batch_size] + n_list[0:batch_size]
-    t = list(f.reshape((1, 512, 512, 3)) for f in t)
-    t = np.concatenate(t, axis=0)
-
-    print(t.shape)
-
-        # thre train step
-    _, summary = sess.run([train, merged], feed_dict={data_holder: t})
-    if global_step % 10 == 0:
-        train_writer.add_summary(summary, global_step)
-    if global_step % 50 == 0:
-        print("Global Step {} OK".format(global_step))
-    if global_step % 1000 == 0:
-        triple.save_npy(sess=sess, npy_path='triplet_lr_1e-4.npy')
-    global_step += 1
+        # the train step
+        _, summary = sess.run([train, merged], feed_dict={data_holder: t})
+        if global_step % 10 == 0:
+            train_writer.add_summary(summary, global_step)
+        if global_step % 50 == 0:
+            print("Global Step {} OK".format(global_step))
+        if global_step % 1000 == 0:
+            triple.save_npy(sess=sess, npy_path='triplet_lr_1e-4.npy')
+        global_step += 1
         
     train_writer.close()
