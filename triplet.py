@@ -52,8 +52,8 @@ class Triplet:
         self.fc4 = self.fc_layer(self.pool3, in_size=in_size, out_size=4096, name='fc4')
         self.relu4 = tf.nn.relu(self.fc4)
 
-        # change the 4096 vector to 1024 vector
-        self.fc5 = self.fc_layer(self.relu4, in_size=4096, out_size=1024, name='fc5')
+        # change the 4096 vector to 128 vector
+        self.fc5 = self.fc_layer(self.relu4, in_size=4096, out_size=256, name='fc5')
 
         self.l2_norm = tf.nn.l2_normalize(self.fc5, dim=1, name='l2_norm')
 
